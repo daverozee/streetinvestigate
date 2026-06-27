@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Infinite Atlas</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./styles.css?v=3">
+  </head>
+  <body>
+    <main class="app-shell">
+      <canvas id="world" aria-label="Infinite terrain map"></canvas>
+
+      <section class="hud hud-left" aria-label="Explorer controls">
+        <div class="brand-row">
+          <div>
+            <h1>Infinite Atlas</h1>
+            <p id="region-name">Initializing terrain</p>
+          </div>
+          <button id="btn-random" class="icon-button" type="button" title="Jump to a far sector" aria-label="Jump to a far sector">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7M21 16v5h-5M21 21l-7-7M3 8V3h5M3 3l7 7"/></svg>
+          </button>
+        </div>
+
+        <div class="tool-row" aria-label="Map controls">
+          <button id="btn-zoom-out" class="icon-button" type="button" title="Zoom out" aria-label="Zoom out">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+          </button>
+          <button id="btn-zoom-in" class="icon-button" type="button" title="Zoom in" aria-label="Zoom in">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button id="btn-home" class="icon-button" type="button" title="Return to Null Island" aria-label="Return to Null Island">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5M9 21v-7h6v7"/></svg>
+          </button>
+          <button id="btn-map" class="icon-button is-active" type="button" title="Toggle internet map layer" aria-label="Toggle internet map layer">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6ZM9 3v15M15 6v15"/></svg>
+          </button>
+          <button id="btn-camera-toggle" class="icon-button" type="button" title="Toggle webcam overlay" aria-label="Toggle webcam overlay">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 10 20 7v10l-5-3v3H4V7h11v3Z"/></svg>
+          </button>
+          <button id="btn-street-toggle" class="icon-button" type="button" title="Enter street mode" aria-label="Enter street mode">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h10M12 3a2.4 2.4 0 1 1 0 4.8A2.4 2.4 0 0 1 12 3ZM10 9l-2 5-3 4M14 9l2 5 3 4M10 9h4M10.8 14h2.4"/></svg>
+          </button>
+        </div>
+
+        <label class="control">
+          <span>Map blend</span>
+          <input id="map-blend" type="range" min="0" max="100" value="72">
+        </label>
+
+        <label class="control">
+          <span>Terrain relief</span>
+          <input id="relief" type="range" min="0" max="100" value="64">
+        </label>
+
+        <div class="jump-panel">
+          <label for="preset">Jump point</label>
+          <select id="preset">
+            <option value="0,0,3">Null Island</option>
+            <option value="40.7128,-74.006,11">New York City</option>
+            <option value="35.6764,139.65,11">Tokyo</option>
+            <option value="27.9881,86.925,10">Everest</option>
+            <option value="-3.4653,-62.2159,8">Amazon Basin</option>
+            <option value="23.4162,25.6628,7">Sahara Expanse</option>
+            <option value="-13.1631,-72.545,12">Machu Picchu</option>
+          </select>
+        </div>
+
+        <form id="coord-form" class="coord-form">
+          <label for="coords">Lat, lon</label>
+          <div>
+            <input id="coords" name="coords" type="text" inputmode="decimal" placeholder="48.8584, 2.2945">
+            <button type="submit">Go</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="hud hud-right" aria-label="World readout">
+        <dl>
+          <div>
+            <dt>Latitude</dt>
+            <dd id="lat-readout">0.0000</dd>
+          </div>
+          <div>
+            <dt>Longitude</dt>
+            <dd id="lon-readout">0.0000</dd>
+          </div>
+          <div>
+            <dt>Zoom</dt>
+            <dd id="zoom-readout">3</dd>
+          </div>
+          <div>
+            <dt>Sector</dt>
+            <dd id="sector-readout">0 / 0</dd>
+          </div>
+          <div>
+            <dt>Speed</dt>
+            <dd id="speed-readout">1.0x</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="hud command-strip" aria-label="Movement controls">
+        <button data-pan="0,-1" class="icon-button" type="button" title="Move north" aria-label="Move north">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 5 7 7M12 5l-7 7M12 5v14"/></svg>
+        </button>
+        <button data-pan="-1,0" class="icon-button" type="button" title="Move west" aria-label="Move west">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 7-7M5 12l7 7M5 12h14"/></svg>
+        </button>
+        <button data-pan="0,1" class="icon-button" type="button" title="Move south" aria-label="Move south">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7M12 19l7-7M12 19V5"/></svg>
+        </button>
+        <button data-pan="1,0" class="icon-button" type="button" title="Move east" aria-label="Move east">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19 12-7-7M19 12l-7 7M19 12H5"/></svg>
+        </button>
+      </section>
+
+      <aside id="camera-panel" class="camera-panel is-hidden" aria-label="Webcam overlay">
+        <video id="camera" playsinline muted></video>
+        <div class="camera-tools">
+          <span id="camera-status">Camera off</span>
+          <button id="btn-camera-close" class="icon-button" type="button" title="Turn camera off" aria-label="Turn camera off">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </aside>
+
+      <section id="street-shell" class="street-shell is-hidden" aria-label="Street-level world">
+        <canvas id="street-canvas"></canvas>
+        <div class="street-topbar">
+          <div class="street-brand">
+            <strong>Street Mode</strong>
+            <span id="street-status">Standby</span>
+          </div>
+          <div class="street-actions">
+            <button id="btn-street-sync" class="icon-button" type="button" title="Load current atlas location" aria-label="Load current atlas location">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8M3 19v-5h5M21 5v5h-5"/></svg>
+            </button>
+            <button id="btn-street-imagery" class="icon-button" type="button" title="Find nearby street imagery" aria-label="Find nearby street imagery">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3v12H4V7ZM12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/></svg>
+            </button>
+            <button id="btn-street-close" class="icon-button" type="button" title="Exit street mode" aria-label="Exit street mode">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <dl class="street-readout">
+          <div>
+            <dt>Roads</dt>
+            <dd id="street-roads">0</dd>
+          </div>
+          <div>
+            <dt>Buildings</dt>
+            <dd id="street-buildings">0</dd>
+          </div>
+          <div>
+            <dt>Lat</dt>
+            <dd id="street-lat">0.0000</dd>
+          </div>
+          <div>
+            <dt>Lon</dt>
+            <dd id="street-lon">0.0000</dd>
+          </div>
+        </dl>
+        <a id="street-image-link" class="street-image-link is-hidden" href="#" target="_blank" rel="noreferrer">Nearby imagery</a>
+      </section>
+
+      <p class="attribution">
+        Map tiles by <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>.
+      </p>
+    </main>
+
+    <script src="./app.js?v=3"></script>
+    <script src="./street.js?v=2"></script>
+  </body>
+</html>
