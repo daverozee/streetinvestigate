@@ -48,6 +48,8 @@ py -m http.server 8787
 - Use the walking icon to enter Street Mode.
 - In Street Mode, use WASD or arrow keys to move.
 - Drag the scene to look around.
+- Hold the left mouse button in Street Mode to walk forward.
+- Hold the right mouse button in Street Mode to back up.
 - Use the sync button to reload Street Mode from the current atlas position.
 - Use the camera button in Street Mode to search nearby Panoramax street-level imagery.
 

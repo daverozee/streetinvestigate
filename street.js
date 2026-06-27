@@ -25,6 +25,8 @@ const streetState = {
   dpr: 1,
   keys: new Set(),
   pointerDown: false,
+  mouseForward: false,
+  mouseBackward: false,
   lastPointer: { x: 0, y: 0 },
   yaw: 0,
   pitch: 0,
@@ -143,9 +145,9 @@ function initStreet() {
   window.addEventListener("resize", resizeStreet);
   streetDom.canvas.addEventListener("pointerdown", onPointerDown);
   streetDom.canvas.addEventListener("pointermove", onPointerMove);
-  window.addEventListener("pointerup", () => {
-    streetState.pointerDown = false;
-  });
+  streetDom.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("blur", clearMouseNavigation);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   streetState.initialized = true;
@@ -166,20 +168,48 @@ function resizeStreet() {
 
 function onPointerDown(event) {
   if (!streetState.active) return;
+  event.preventDefault();
   streetState.pointerDown = true;
+  setMouseNavigationFromButtons(event.buttons || buttonMask(event.button));
   streetState.lastPointer.x = event.clientX;
   streetState.lastPointer.y = event.clientY;
   streetDom.canvas.setPointerCapture?.(event.pointerId);
 }
 
 function onPointerMove(event) {
-  if (!streetState.active || !streetState.pointerDown) return;
+  if (!streetState.active) return;
+  setMouseNavigationFromButtons(event.buttons);
+  if (!streetState.pointerDown) return;
   const dx = event.clientX - streetState.lastPointer.x;
   const dy = event.clientY - streetState.lastPointer.y;
   streetState.lastPointer.x = event.clientX;
   streetState.lastPointer.y = event.clientY;
   streetState.yaw -= dx * 0.0042;
   streetState.pitch = clamp(streetState.pitch - dy * 0.004, -0.55, 0.55);
+}
+
+function onPointerUp(event) {
+  if (!streetState.active) return;
+  setMouseNavigationFromButtons(event.buttons);
+  if (!event.buttons) streetState.pointerDown = false;
+}
+
+function buttonMask(button) {
+  if (button === 0) return 1;
+  if (button === 1) return 4;
+  if (button === 2) return 2;
+  return 0;
+}
+
+function setMouseNavigationFromButtons(buttons = 0) {
+  streetState.mouseForward = Boolean(buttons & 1);
+  streetState.mouseBackward = Boolean(buttons & 2);
+}
+
+function clearMouseNavigation() {
+  streetState.pointerDown = false;
+  streetState.mouseForward = false;
+  streetState.mouseBackward = false;
 }
 
 function onKeyDown(event) {
@@ -208,6 +238,7 @@ function closeStreet() {
   streetState.active = false;
   cancelAnimationFrame(streetState.animationId);
   clearTimeout(streetState.addressTimer);
+  clearMouseNavigation();
   document.body.classList.remove("street-active");
   streetDom.shell.classList.add("is-hidden");
   streetDom.open.classList.remove("is-active");
@@ -635,6 +666,8 @@ function updateCamera(delta) {
   let strafe = 0;
   if (streetState.keys.has("w") || streetState.keys.has("ArrowUp")) forward += 1;
   if (streetState.keys.has("s") || streetState.keys.has("ArrowDown")) forward -= 1;
+  if (streetState.mouseForward) forward += 1;
+  if (streetState.mouseBackward) forward -= 1;
   if (streetState.keys.has("a") || streetState.keys.has("ArrowLeft")) strafe -= 1;
   if (streetState.keys.has("d") || streetState.keys.has("ArrowRight")) strafe += 1;
 
