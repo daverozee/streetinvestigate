@@ -10,6 +10,7 @@ const streetDom = {
   buildings: document.querySelector("#street-buildings"),
   lat: document.querySelector("#street-lat"),
   lon: document.querySelector("#street-lon"),
+  address: document.querySelector("#street-address"),
   imageLink: document.querySelector("#street-image-link"),
 };
 
@@ -40,6 +41,11 @@ const streetState = {
   reloadRadius: 800,
   animationId: 0,
   lastImageryKey: "",
+  addressCache: new Map(),
+  lastAddressKey: "",
+  lastAddressLookupAt: 0,
+  addressTimer: 0,
+  addressRequestId: 0,
 };
 
 const ROAD_WIDTHS = {
@@ -125,6 +131,11 @@ function setCounts(roads, buildings) {
   streetDom.buildings.textContent = String(buildings);
 }
 
+function setAddress(text) {
+  streetDom.address.textContent = text;
+  streetDom.address.title = text;
+}
+
 function initStreet() {
   if (streetState.initialized) return;
   window.addEventListener("resize", resizeStreet);
@@ -194,6 +205,7 @@ async function activateStreet() {
 function closeStreet() {
   streetState.active = false;
   cancelAnimationFrame(streetState.animationId);
+  clearTimeout(streetState.addressTimer);
   document.body.classList.remove("street-active");
   streetDom.shell.classList.add("is-hidden");
   streetDom.open.classList.remove("is-active");
@@ -210,6 +222,8 @@ async function loadWorld(lat, lon, options = {}) {
   streetState.loading = true;
   streetState.origin = { lat, lon };
   hideImagery();
+  streetState.lastAddressKey = "";
+  setAddress("Locating");
   setStatus("Streaming OSM");
 
   try {
@@ -456,6 +470,77 @@ function updateCurrentPosition() {
   streetState.current = latLonFromLocal(streetState.camera.x, streetState.camera.z);
   streetDom.lat.textContent = streetState.current.lat.toFixed(5);
   streetDom.lon.textContent = streetState.current.lon.toFixed(5);
+  scheduleAddressLookup();
+}
+
+function addressKeyFor(lat, lon) {
+  return `${lat.toFixed(4)},${lon.toFixed(4)}`;
+}
+
+function scheduleAddressLookup() {
+  if (!streetState.active) return;
+  const { lat, lon } = streetState.current;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+  const key = addressKeyFor(lat, lon);
+  if (key === streetState.lastAddressKey) return;
+  streetState.lastAddressKey = key;
+
+  if (streetState.addressCache.has(key)) {
+    setAddress(streetState.addressCache.get(key));
+    return;
+  }
+
+  setAddress("Locating");
+  clearTimeout(streetState.addressTimer);
+  const elapsed = Date.now() - streetState.lastAddressLookupAt;
+  const delay = Math.max(0, 1500 - elapsed);
+  streetState.addressTimer = setTimeout(() => lookupAddress(key, lat, lon), delay);
+}
+
+async function lookupAddress(key, lat, lon) {
+  if (!streetState.active || key !== streetState.lastAddressKey) return;
+  streetState.lastAddressLookupAt = Date.now();
+  const requestId = ++streetState.addressRequestId;
+
+  try {
+    const params = new URLSearchParams({
+      format: "jsonv2",
+      lat: String(lat),
+      lon: String(lon),
+      zoom: "18",
+      addressdetails: "1",
+      namedetails: "0",
+      "accept-language": navigator.language || "en",
+    });
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) throw new Error(`Nominatim ${response.status}`);
+    const data = await response.json();
+    const address = formatAddress(data) || `Near ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    streetState.addressCache.set(key, address);
+    if (requestId === streetState.addressRequestId && key === streetState.lastAddressKey) setAddress(address);
+  } catch {
+    const fallback = streetState.dataSource === "procedural" ? "Unmapped procedural sector" : `Near ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    streetState.addressCache.set(key, fallback);
+    if (requestId === streetState.addressRequestId && key === streetState.lastAddressKey) setAddress(fallback);
+  }
+}
+
+function formatAddress(data) {
+  const address = data?.address || {};
+  const house = address.house_number;
+  const road = address.road || address.pedestrian || address.footway || address.path || address.cycleway;
+  const place = address.neighbourhood || address.suburb || address.city_district || address.city || address.town || address.village;
+  const region = address.state || address.region;
+  const postcode = address.postcode;
+  const country = address.country_code ? address.country_code.toUpperCase() : address.country;
+  const firstLine = [house, road].filter(Boolean).join(" ");
+  const secondLine = [place, region, postcode].filter(Boolean).join(", ");
+  const compact = [firstLine, secondLine, country].filter(Boolean).join(" | ");
+  if (compact) return compact;
+  return data?.display_name || "";
 }
 
 function updateCamera(delta) {

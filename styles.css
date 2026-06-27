@@ -362,7 +362,7 @@ dd {
   right: 18px;
   bottom: 84px;
   z-index: 22;
-  width: 188px;
+  width: min(310px, calc(100vw - 36px));
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -381,6 +381,18 @@ dd {
 
 .street-readout div:last-child {
   border-bottom: 0;
+}
+
+.street-readout .street-address-row {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.street-readout .street-address-row dd {
+  text-align: left;
+  white-space: normal;
+  line-height: 1.25;
+  font-size: 12px;
 }
 
 .street-image-link {
