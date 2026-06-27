@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Infinite Atlas.
+Thanks for helping improve Criminality.
 
 This project is a small static prototype, so the best contributions are focused, easy to review, and careful with public mapping services.
 

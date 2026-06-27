@@ -1,6 +1,6 @@
 # Code of Conduct
 
-We want Infinite Atlas to be a welcoming project for curious builders.
+We want Criminality to be a welcoming project for curious builders.
 
 ## Our Standards
 

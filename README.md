@@ -1,6 +1,6 @@
-# Infinite Atlas
+# Criminality
 
-Infinite Atlas is a browser-based infinite terrain and street-level exploration prototype.
+Criminality is a browser-based infinite terrain and street-level exploration prototype.
 
 It is early-stage, experimental, and open to contributors who want to explore procedural worlds, mapping data, first-person navigation, or street-level interfaces.
 

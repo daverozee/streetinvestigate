@@ -105,7 +105,11 @@ function terrainHeight(x, z) {
 }
 
 function getAtlasCenter() {
-  return window.InfiniteAtlas?.getCenter?.() || { lat: 40.7128, lon: -74.006, zoom: 12 };
+  return getAtlasApi()?.getCenter?.() || { lat: 40.7128, lon: -74.006, zoom: 12 };
+}
+
+function getAtlasApi() {
+  return window.Criminality?.atlas || window.CriminalityAtlas;
 }
 
 function localFromLatLon(lat, lon) {
@@ -242,7 +246,8 @@ function closeStreet() {
   document.body.classList.remove("street-active");
   streetDom.shell.classList.add("is-hidden");
   streetDom.open.classList.remove("is-active");
-  if (window.InfiniteAtlas?.jumpTo) window.InfiniteAtlas.jumpTo(streetState.current.lat, streetState.current.lon, Math.max(getAtlasCenter().zoom, 15));
+  const atlasApi = getAtlasApi();
+  if (atlasApi?.jumpTo) atlasApi.jumpTo(streetState.current.lat, streetState.current.lon, Math.max(getAtlasCenter().zoom, 15));
 }
 
 async function loadCurrentAtlasLocation() {
@@ -573,6 +578,42 @@ function nearestPoint(points, target) {
   return { ...best };
 }
 
+function nearestNamedRoadLabel() {
+  const target = { x: streetState.camera.x, z: streetState.camera.z };
+  let bestRoad = "";
+  let bestDistance = Infinity;
+  for (const road of streetState.roads) {
+    if (!road.name || road.points.length < 2) continue;
+    for (let index = 0; index < road.points.length - 1; index += 1) {
+      const distance = distanceToSegment(target, road.points[index], road.points[index + 1]);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestRoad = road.name;
+      }
+    }
+  }
+  return bestRoad;
+}
+
+function distanceToSegment(point, a, b) {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const lengthSquared = dx * dx + dz * dz;
+  if (!lengthSquared) return Math.hypot(point.x - a.x, point.z - a.z);
+  const t = clamp(((point.x - a.x) * dx + (point.z - a.z) * dz) / lengthSquared, 0, 1);
+  const x = a.x + dx * t;
+  const z = a.z + dz * t;
+  return Math.hypot(point.x - x, point.z - z);
+}
+
+function fallbackAddress() {
+  const road = nearestNamedRoadLabel();
+  if (streetState.dataSource === "procedural") {
+    return road ? `No mapped street address | Procedural sector near ${road}` : "No mapped street address | Procedural sector";
+  }
+  return road ? `No house address mapped | Near ${road}` : "No mapped street address";
+}
+
 function placePlayer(spawn) {
   if (spawn) {
     streetState.camera.x = spawn.x;
@@ -634,11 +675,11 @@ async function lookupAddress(key, lat, lon) {
     });
     if (!response.ok) throw new Error(`Nominatim ${response.status}`);
     const data = await response.json();
-    const address = formatAddress(data) || `Near ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    const address = formatAddress(data) || fallbackAddress();
     streetState.addressCache.set(key, address);
     if (requestId === streetState.addressRequestId && key === streetState.lastAddressKey) setAddress(address);
   } catch {
-    const fallback = streetState.dataSource === "procedural" ? "Unmapped procedural sector" : `Near ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    const fallback = fallbackAddress();
     streetState.addressCache.set(key, fallback);
     if (requestId === streetState.addressRequestId && key === streetState.lastAddressKey) setAddress(fallback);
   }
@@ -1141,9 +1182,12 @@ streetDom.close.addEventListener("click", closeStreet);
 streetDom.sync.addEventListener("click", loadCurrentAtlasLocation);
 streetDom.imagery.addEventListener("click", findImagery);
 
-window.InfiniteStreet = {
+const criminalityStreetApi = {
   activate: activateStreet,
   close: closeStreet,
   reload: loadCurrentAtlasLocation,
   getPosition: () => ({ ...streetState.current }),
 };
+
+window.Criminality = { ...(window.Criminality || {}), street: criminalityStreetApi };
+window.CriminalityStreet = criminalityStreetApi;

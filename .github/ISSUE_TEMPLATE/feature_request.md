@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Infinite Atlas
+about: Suggest an idea for Criminality
 title: "[Feature]: "
 labels: enhancement
 assignees: ""

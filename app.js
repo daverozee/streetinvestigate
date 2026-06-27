@@ -515,7 +515,7 @@ ui.coordForm.addEventListener("submit", (event) => {
 ui.cameraToggle.addEventListener("click", toggleCamera);
 ui.cameraClose.addEventListener("click", toggleCamera);
 
-window.InfiniteAtlas = {
+const criminalityAtlasApi = {
   getCenter: getCenterGeo,
   jumpTo,
   setMapVisible(show) {
@@ -524,6 +524,9 @@ window.InfiniteAtlas = {
     draw();
   },
 };
+
+window.Criminality = { ...(window.Criminality || {}), atlas: criminalityAtlasApi };
+window.CriminalityAtlas = criminalityAtlasApi;
 
 resize();
 step();
