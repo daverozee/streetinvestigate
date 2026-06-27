@@ -35,6 +35,7 @@ const streetState = {
   buildings: [],
   flats: [],
   trees: [],
+  signs: [],
   counts: { roads: 0, buildings: 0 },
   dataSource: "procedural",
   lastTime: 0,
@@ -46,6 +47,7 @@ const streetState = {
   lastAddressLookupAt: 0,
   addressTimer: 0,
   addressRequestId: 0,
+  labelRects: [],
 };
 
 const ROAD_WIDTHS = {
@@ -252,6 +254,9 @@ async function fetchOsm(lat, lon, radius) {
     (
       way(around:${radius},${lat},${lon})["highway"];
       way(around:${radius},${lat},${lon})["building"];
+      way(around:${radius},${lat},${lon})["amenity"];
+      way(around:${radius},${lat},${lon})["shop"];
+      way(around:${radius},${lat},${lon})["tourism"];
       way(around:${radius},${lat},${lon})["natural"="water"];
       way(around:${radius},${lat},${lon})["leisure"="park"];
       way(around:${radius},${lat},${lon})["landuse"="grass"];
@@ -286,6 +291,7 @@ function clearWorld() {
   streetState.buildings = [];
   streetState.flats = [];
   streetState.trees = [];
+  streetState.signs = [];
 }
 
 function buildOsmWorld(data, options) {
@@ -310,23 +316,37 @@ function buildOsmWorld(data, options) {
   let roads = 0;
   let buildings = 0;
   let spawn = null;
+  const roadNames = new Set();
 
   for (const way of ways) {
     const points = (way.nodes || []).map((id) => nodes.get(id)).filter(Boolean).map((node) => localFromLatLon(node.lat, node.lon));
     if (points.length < 2) continue;
     if (way.tags?.highway) {
+      const roadName = way.tags.name || way.tags.ref || "";
       streetState.roads.push({
         points,
         width: ROAD_WIDTHS[way.tags.highway] || 5.5,
-        color: isPath(way.tags.highway) ? "#b7a26a" : "#303735",
+        color: roadColor(way.tags.highway),
+        edgeColor: isPath(way.tags.highway) ? "rgba(255, 240, 180, 0.36)" : "rgba(215, 224, 213, 0.28)",
+        centerColor: majorRoad(way.tags.highway) ? "rgba(250, 224, 108, 0.55)" : "rgba(236, 241, 231, 0.32)",
+        name: roadName,
+        type: way.tags.highway,
       });
       roads += 1;
       spawn ||= nearestPoint(points, { x: 0, z: 0 });
-    } else if (way.tags?.building && points.length >= 4 && isClosed(points)) {
+      if (roadName && !roadNames.has(roadName) && roadNames.size < 54) {
+        roadNames.add(roadName);
+        addRoadSign(points, roadName, way.tags.highway);
+      }
+    } else if ((way.tags?.building || way.tags?.amenity || way.tags?.shop || way.tags?.tourism) && points.length >= 4 && isClosed(points)) {
+      const label = formatBuildingLabel(way.tags);
       streetState.buildings.push({
         points: points.slice(0, -1),
         height: buildingHeight(way.tags),
-        color: buildingColor(way.id || buildings),
+        color: buildingColor(way.id || buildings, way.tags),
+        trimColor: trimColor(way.id || buildings, way.tags),
+        label,
+        kind: way.tags.shop || way.tags.amenity || way.tags.tourism || way.tags.building || "building",
       });
       buildings += 1;
     } else if (way.tags?.natural === "water" && isClosed(points)) {
@@ -336,8 +356,7 @@ function buildOsmWorld(data, options) {
     }
   }
 
-  if (treeCount < 12) addProceduralTrees(32);
-  addDistantCity();
+  if (buildings < 18) addDistantCity();
   setCounts(roads, buildings);
   placePlayer(options.resetPlayer ? (spawn || { x: 0, z: 0 }) : null);
   return { roads, buildings };
@@ -350,8 +369,14 @@ function buildProceduralWorld(options) {
 
   for (let i = -5; i <= 5; i += 1) {
     const offset = i * 92;
-    streetState.roads.push({ points: [{ x: -760, z: offset }, { x: 760, z: offset }], width: i === 0 ? 10 : 6, color: "#303735" });
-    streetState.roads.push({ points: [{ x: offset, z: -760 }, { x: offset, z: 760 }], width: i === 0 ? 10 : 6, color: "#303735" });
+    const eastWestName = i === 0 ? "Origin Avenue" : `${Math.abs(i) * 2}th Avenue ${i > 0 ? "S" : "N"}`;
+    const northSouthName = i === 0 ? "Meridian Street" : `${Math.abs(i) * 2 + 1}th Street ${i > 0 ? "E" : "W"}`;
+    const eastWest = { points: [{ x: -760, z: offset }, { x: 760, z: offset }], width: i === 0 ? 10 : 6, color: "#303735", edgeColor: "rgba(215, 224, 213, 0.28)", centerColor: "rgba(236, 241, 231, 0.32)", name: eastWestName, type: "residential" };
+    const northSouth = { points: [{ x: offset, z: -760 }, { x: offset, z: 760 }], width: i === 0 ? 10 : 6, color: "#303735", edgeColor: "rgba(215, 224, 213, 0.28)", centerColor: "rgba(236, 241, 231, 0.32)", name: northSouthName, type: "residential" };
+    streetState.roads.push(eastWest);
+    streetState.roads.push(northSouth);
+    addRoadSign(eastWest.points, eastWestName, "residential");
+    addRoadSign(northSouth.points, northSouthName, "residential");
     roads += 2;
   }
 
@@ -367,13 +392,15 @@ function buildProceduralWorld(options) {
       streetState.buildings.push({
         points: rectPoints(cx, cz, sx, sz),
         height,
-        color: buildingColor(gx * 1000 + gz),
+        color: buildingColor(gx * 1000 + gz, {}),
+        trimColor: trimColor(gx * 1000 + gz, {}),
+        label: `${Math.abs(gx * 100 + gz * 7) + 10} Sector Block`,
+        kind: "generated",
       });
       buildings += 1;
     }
   }
 
-  addProceduralTrees(180);
   addDistantCity();
   setCounts(roads, buildings);
   placePlayer(options.resetPlayer ? { x: 0, z: 0 } : null);
@@ -392,6 +419,8 @@ function addDistantCity() {
       points: rectPoints(cx, cz, sx, sz),
       height,
       color: "rgba(120, 138, 131, 0.42)",
+      trimColor: "rgba(230, 238, 222, 0.18)",
+      label: "",
       distant: true,
     });
   }
@@ -413,6 +442,36 @@ function rectPoints(cx, cz, sx, sz) {
     { x: cx + sx / 2, z: cz + sz / 2 },
     { x: cx - sx / 2, z: cz + sz / 2 },
   ];
+}
+
+function roadColor(type) {
+  if (type === "motorway" || type === "trunk") return "#26312f";
+  if (type === "primary" || type === "secondary") return "#2d3433";
+  if (type === "footway" || type === "path" || type === "cycleway" || type === "steps") return "#b7a26a";
+  if (type === "service" || type === "track") return "#44413a";
+  return "#303735";
+}
+
+function majorRoad(type) {
+  return type === "motorway" || type === "trunk" || type === "primary" || type === "secondary" || type === "tertiary";
+}
+
+function addRoadSign(points, name, type) {
+  if (!name || points.length < 2) return;
+  const index = Math.max(0, Math.floor((points.length - 1) / 2));
+  const a = points[index];
+  const b = points[index + 1] || points[index];
+  const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const width = (ROAD_WIDTHS[type] || 6) * 0.5 + 2.2;
+  streetState.signs.push({
+    x: mid.x + (-dz / len) * width,
+    z: mid.z + (dx / len) * width,
+    text: name,
+    kind: "street",
+  });
 }
 
 function isPath(type) {
@@ -437,11 +496,37 @@ function buildingHeight(tags) {
   return 7 + Math.random() * 14;
 }
 
-function buildingColor(seed) {
-  const r = Math.round(112 + hash2(seed, 1, 10) * 64);
-  const g = Math.round(100 + hash2(seed, 2, 11) * 62);
-  const b = Math.round(82 + hash2(seed, 3, 12) * 48);
+function formatBuildingLabel(tags) {
+  const house = tags["addr:housenumber"];
+  const street = tags["addr:street"];
+  const unit = tags["addr:unit"] || tags["addr:flats"];
+  const address = [house, street].filter(Boolean).join(" ");
+  const use = tags.name || tags.operator || tags.brand || tags.shop || tags.amenity || tags.tourism;
+  if (use && address) return unit ? `${use} | ${address} #${unit}` : `${use} | ${address}`;
+  if (address) return unit ? `${address} #${unit}` : address;
+  if (use) return titleCase(String(use).replace(/_/g, " "));
+  return "";
+}
+
+function titleCase(text) {
+  return text.replace(/\b[a-z]/g, (char) => char.toUpperCase());
+}
+
+function buildingColor(seed, tags) {
+  if (tags.shop) return "rgb(126, 93, 99)";
+  if (tags.amenity) return "rgb(103, 107, 132)";
+  if (tags.tourism) return "rgb(116, 99, 136)";
+  if (tags.building === "church" || tags.amenity === "place_of_worship") return "rgb(136, 123, 105)";
+  if (tags.building === "school" || tags.amenity === "school") return "rgb(129, 111, 76)";
+  const r = Math.round(112 + hash2(seed, 1, 10) * 58);
+  const g = Math.round(100 + hash2(seed, 2, 11) * 56);
+  const b = Math.round(82 + hash2(seed, 3, 12) * 44);
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+function trimColor(seed, tags) {
+  if (tags.shop || tags.amenity || tags.tourism) return "rgba(255, 232, 174, 0.48)";
+  return hash2(seed, 4, 91) > 0.5 ? "rgba(233, 238, 222, 0.25)" : "rgba(68, 53, 44, 0.28)";
 }
 
 function nearestPoint(points, target) {
@@ -591,6 +676,7 @@ function projectPoint(x, y, z) {
 function drawStreetFrame() {
   const w = streetState.width;
   const h = streetState.height;
+  streetState.labelRects = [];
   drawSky(w, h);
   drawGround(w, h);
 
@@ -599,6 +685,7 @@ function drawStreetFrame() {
   for (const road of streetState.roads) addRoadItems(items, road);
   for (const building of streetState.buildings) addBuildingItems(items, building);
   for (const tree of streetState.trees) addTreeItems(items, tree);
+  for (const sign of streetState.signs) addSignItems(items, sign);
 
   items.sort((a, b) => b.depth - a.depth);
   for (const item of items) item.draw();
@@ -681,6 +768,8 @@ function addRoadItems(items, road) {
     ];
     const projected = corners.map((p) => projectPoint(p.x, terrainHeight(p.x, p.z) + 0.1, p.z));
     if (projected.some((point) => !point)) continue;
+    const centerA = projectPoint(a.x, terrainHeight(a.x, a.z) + 0.16, a.z);
+    const centerB = projectPoint(b.x, terrainHeight(b.x, b.z) + 0.16, b.z);
     const depth = projected.reduce((sum, point) => sum + point.depth, 0) / 4;
     items.push({
       depth,
@@ -693,9 +782,20 @@ function addRoadItems(items, road) {
         });
         sctx.closePath();
         sctx.fill();
-        sctx.strokeStyle = "rgba(255,255,255,0.16)";
+        sctx.strokeStyle = road.edgeColor || "rgba(255,255,255,0.16)";
         sctx.lineWidth = Math.max(1, 2.2 / Math.max(1, depth * 0.015));
         sctx.stroke();
+        if (centerA && centerB && depth < 520 && !isPath(road.type)) {
+          sctx.save();
+          sctx.strokeStyle = road.centerColor || "rgba(236, 241, 231, 0.32)";
+          sctx.lineWidth = clamp(170 / depth, 1, 3);
+          sctx.setLineDash(majorRoad(road.type) ? [18, 12] : [10, 16]);
+          sctx.beginPath();
+          sctx.moveTo(centerA.x, centerA.y);
+          sctx.lineTo(centerB.x, centerB.y);
+          sctx.stroke();
+          sctx.restore();
+        }
       },
     });
   }
@@ -730,6 +830,7 @@ function addBuildingItems(items, building) {
         sctx.fill();
         sctx.strokeStyle = building.distant ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.16)";
         sctx.stroke();
+        drawFacadeTrim(p1, p2, p3, p4, depth, building);
         drawWindows(p1, p2, p3, p4, depth, building.distant);
       },
     });
@@ -751,6 +852,58 @@ function addBuildingItems(items, building) {
         sctx.fill();
       },
     });
+  }
+
+  if (building.label && !building.distant) {
+    const center = polygonCenter(points);
+    const labelY = baseY + clamp(building.height * 0.42, 3.2, 10);
+    const projected = projectPoint(center.x, labelY, center.z);
+    if (projected && projected.depth < 260) {
+      items.push({
+        depth: projected.depth - 0.03,
+        draw() {
+          drawBillboardLabel(projected, building.label, {
+            fill: "rgba(20, 24, 23, 0.78)",
+            stroke: building.trimColor || "rgba(255, 232, 174, 0.42)",
+            text: "#f4f2dc",
+            maxWidth: 210,
+          });
+        },
+      });
+    }
+  }
+}
+
+function polygonCenter(points) {
+  const center = points.reduce((sum, point) => ({ x: sum.x + point.x, z: sum.z + point.z }), { x: 0, z: 0 });
+  return { x: center.x / points.length, z: center.z / points.length };
+}
+
+function drawFacadeTrim(p1, p2, p3, p4, depth, building) {
+  if (building.distant || depth > 360) return;
+  const height = Math.abs(p1.y - p4.y);
+  const width = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const columns = clamp(Math.floor(width / 58), 1, 5);
+  sctx.strokeStyle = building.trimColor || "rgba(233, 238, 222, 0.22)";
+  sctx.lineWidth = clamp(120 / depth, 1, 2.5);
+  for (let col = 1; col < columns; col += 1) {
+    const t = col / columns;
+    const bottom = interp2(p1, p2, t);
+    const top = interp2(p4, p3, t);
+    sctx.beginPath();
+    sctx.moveTo(bottom.x, bottom.y);
+    sctx.lineTo(top.x, top.y);
+    sctx.stroke();
+  }
+  if (height > 55) {
+    const awningBottom = interp2(p1, p4, 0.18);
+    const awningTop = interp2(p2, p3, 0.18);
+    sctx.strokeStyle = building.kind === "shop" ? "rgba(255, 203, 112, 0.58)" : "rgba(255, 255, 255, 0.18)";
+    sctx.lineWidth = clamp(220 / depth, 1.5, 5);
+    sctx.beginPath();
+    sctx.moveTo(awningBottom.x, awningBottom.y);
+    sctx.lineTo(awningTop.x, awningTop.y);
+    sctx.stroke();
   }
 }
 
@@ -776,7 +929,12 @@ function drawWindows(p1, p2, p3, p4, depth, distant) {
       const top = interp2(p4, p3, tu);
       const center = interp2(bottom, top, tv);
       const size = clamp(90 / depth, 1.3, 4);
-      sctx.fillRect(center.x - size, center.y - size * 0.7, size * 2, size * 1.4);
+      sctx.fillRect(center.x - size, center.y - size * 0.75, size * 2, size * 1.5);
+      if (depth < 170) {
+        sctx.fillStyle = "rgba(18, 25, 28, 0.16)";
+        sctx.fillRect(center.x - size * 0.15, center.y - size * 0.75, size * 0.3, size * 1.5);
+        sctx.fillStyle = "rgba(246, 226, 151, 0.22)";
+      }
     }
   }
 }
@@ -788,28 +946,104 @@ function interp2(a, b, t) {
 function addTreeItems(items, tree) {
   const baseY = terrainHeight(tree.x, tree.z);
   const base = projectPoint(tree.x, baseY, tree.z);
-  const top = projectPoint(tree.x, baseY + tree.height, tree.z);
+  const treeHeight = Math.min(tree.height, 5.8);
+  const top = projectPoint(tree.x, baseY + treeHeight, tree.z);
   if (!base || !top) return;
   const depth = base.depth;
-  const crown = Math.max(5, tree.height * base.scale * 0.45);
+  const crown = clamp(treeHeight * base.scale * 0.23, 3.5, 18);
   items.push({
     depth,
     draw() {
       sctx.strokeStyle = "#5d432e";
-      sctx.lineWidth = clamp(24 / depth, 1.5, 5);
+      sctx.lineWidth = clamp(16 / depth, 1, 3);
       sctx.beginPath();
       sctx.moveTo(base.x, base.y);
-      sctx.lineTo(top.x, top.y + crown * 0.28);
+      sctx.lineTo(top.x, top.y + crown * 0.45);
       sctx.stroke();
-      sctx.fillStyle = "rgba(49, 103, 64, 0.88)";
+      sctx.fillStyle = "rgba(48, 111, 70, 0.72)";
       sctx.beginPath();
-      sctx.moveTo(top.x, top.y - crown * 0.8);
-      sctx.lineTo(top.x - crown * 0.75, top.y + crown * 0.6);
-      sctx.lineTo(top.x + crown * 0.75, top.y + crown * 0.6);
-      sctx.closePath();
+      sctx.ellipse(top.x, top.y, crown * 0.85, crown * 0.62, 0, 0, Math.PI * 2);
+      sctx.fill();
+      sctx.fillStyle = "rgba(72, 137, 84, 0.42)";
+      sctx.beginPath();
+      sctx.ellipse(top.x - crown * 0.24, top.y - crown * 0.15, crown * 0.45, crown * 0.36, 0, 0, Math.PI * 2);
       sctx.fill();
     },
   });
+}
+
+function addSignItems(items, sign) {
+  const ground = terrainHeight(sign.x, sign.z);
+  const base = projectPoint(sign.x, ground, sign.z);
+  const top = projectPoint(sign.x, ground + 3.1, sign.z);
+  if (!base || !top || top.depth > 300) return;
+  items.push({
+    depth: top.depth - 0.05,
+    draw() {
+      sctx.strokeStyle = "rgba(28, 34, 33, 0.82)";
+      sctx.lineWidth = clamp(90 / top.depth, 1.2, 3);
+      sctx.beginPath();
+      sctx.moveTo(base.x, base.y);
+      sctx.lineTo(top.x, top.y);
+      sctx.stroke();
+      drawBillboardLabel(top, sign.text, {
+        fill: sign.kind === "street" ? "rgba(22, 87, 72, 0.92)" : "rgba(20, 24, 23, 0.84)",
+        stroke: "rgba(236, 245, 225, 0.72)",
+        text: "#f7fff2",
+        maxWidth: 170,
+      });
+    },
+  });
+}
+
+function drawBillboardLabel(projected, text, options) {
+  const label = String(text).slice(0, 58);
+  const fontSize = clamp(260 / projected.depth, 10, 16);
+  sctx.save();
+  sctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+  const paddingX = fontSize * 0.75;
+  const paddingY = fontSize * 0.45;
+  let width = Math.min(options.maxWidth || 180, sctx.measureText(label).width + paddingX * 2);
+  const height = fontSize + paddingY * 2;
+  const x = clamp(projected.x - width / 2, 8, streetState.width - width - 8);
+  const y = clamp(projected.y - height - 5, 8, streetState.height - height - 8);
+  const rect = { x, y, width, height };
+  if (streetState.labelRects.some((other) => rectsOverlap(rect, other))) {
+    sctx.restore();
+    return false;
+  }
+  streetState.labelRects.push(rect);
+  sctx.fillStyle = options.fill;
+  sctx.strokeStyle = options.stroke;
+  sctx.lineWidth = 1;
+  roundRect(x, y, width, height, 5);
+  sctx.fill();
+  sctx.stroke();
+  sctx.fillStyle = options.text;
+  sctx.textAlign = "center";
+  sctx.textBaseline = "middle";
+  sctx.fillText(label, x + width / 2, y + height / 2, width - paddingX);
+  sctx.restore();
+  return true;
+}
+
+function rectsOverlap(a, b) {
+  const pad = 5;
+  return !(a.x + a.width + pad < b.x || b.x + b.width + pad < a.x || a.y + a.height + pad < b.y || b.y + b.height + pad < a.y);
+}
+
+function roundRect(x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  sctx.beginPath();
+  sctx.moveTo(x + r, y);
+  sctx.lineTo(x + width - r, y);
+  sctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  sctx.lineTo(x + width, y + height - r);
+  sctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  sctx.lineTo(x + r, y + height);
+  sctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  sctx.lineTo(x, y + r);
+  sctx.quadraticCurveTo(x, y, x + r, y);
 }
 
 function drawReticle() {

@@ -17,6 +17,7 @@ It blends three layers:
 - Live Overpass API queries for nearby OSM roads, buildings, parks, water, and trees.
 - First-person Street Mode with walk controls and mouse/touch look.
 - Reverse-geocoded street address display while navigating in Street Mode.
+- OSM-derived street signs, road markings, building plaques, address labels, and facade detail.
 - Procedural fallback terrain and city generation when live map data is sparse.
 - Optional Panoramax nearby street-level imagery lookup.
 - Webcam overlay support in atlas mode.
@@ -59,6 +60,7 @@ Contributions are welcome. Good first areas include:
 - Performance improvements for dense OSM areas.
 - Better mobile Street Mode controls.
 - Visual polish for buildings, roads, terrain, and lighting.
+- Better labels and signs that stay grounded in mapped OSM data.
 - More street-level imagery providers.
 - Offline or cached data experiments that respect provider policies.
 
