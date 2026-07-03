@@ -1,6 +1,6 @@
 # Code of Conduct
 
-We want Criminality to be a welcoming project for curious builders.
+We want StreetInvestigate to be a welcoming project for curious builders.
 
 ## Our Standards
 

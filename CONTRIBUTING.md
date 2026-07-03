@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Criminality.
+Thanks for helping improve StreetInvestigate.
 
 This project is a small static prototype, so the best contributions are focused, easy to review, and careful with public mapping services.
 

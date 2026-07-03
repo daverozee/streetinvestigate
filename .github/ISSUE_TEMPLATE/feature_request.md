@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Criminality
+about: Suggest an idea for StreetInvestigate
 title: "[Feature]: "
 labels: enhancement
 assignees: ""

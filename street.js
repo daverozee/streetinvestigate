@@ -109,7 +109,7 @@ function getAtlasCenter() {
 }
 
 function getAtlasApi() {
-  return window.Criminality?.atlas || window.CriminalityAtlas;
+  return window.StreetInvestigate?.atlas || window.StreetInvestigateAtlas;
 }
 
 function localFromLatLon(lat, lon) {
@@ -1182,12 +1182,12 @@ streetDom.close.addEventListener("click", closeStreet);
 streetDom.sync.addEventListener("click", loadCurrentAtlasLocation);
 streetDom.imagery.addEventListener("click", findImagery);
 
-const criminalityStreetApi = {
+const streetInvestigateStreetApi = {
   activate: activateStreet,
   close: closeStreet,
   reload: loadCurrentAtlasLocation,
   getPosition: () => ({ ...streetState.current }),
 };
 
-window.Criminality = { ...(window.Criminality || {}), street: criminalityStreetApi };
-window.CriminalityStreet = criminalityStreetApi;
+window.StreetInvestigate = { ...(window.StreetInvestigate || {}), street: streetInvestigateStreetApi };
+window.StreetInvestigateStreet = streetInvestigateStreetApi;

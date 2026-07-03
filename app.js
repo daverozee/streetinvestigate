@@ -515,7 +515,7 @@ ui.coordForm.addEventListener("submit", (event) => {
 ui.cameraToggle.addEventListener("click", toggleCamera);
 ui.cameraClose.addEventListener("click", toggleCamera);
 
-const criminalityAtlasApi = {
+const streetInvestigateAtlasApi = {
   getCenter: getCenterGeo,
   jumpTo,
   setMapVisible(show) {
@@ -525,8 +525,8 @@ const criminalityAtlasApi = {
   },
 };
 
-window.Criminality = { ...(window.Criminality || {}), atlas: criminalityAtlasApi };
-window.CriminalityAtlas = criminalityAtlasApi;
+window.StreetInvestigate = { ...(window.StreetInvestigate || {}), atlas: streetInvestigateAtlasApi };
+window.StreetInvestigateAtlas = streetInvestigateAtlasApi;
 
 resize();
 step();
